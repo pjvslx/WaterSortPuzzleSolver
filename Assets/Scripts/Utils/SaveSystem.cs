@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
+using Newtonsoft.Json;
+using SFB;
+using System.Text;
 
 public class SaveSystem : MonoBehaviour
 {
@@ -26,6 +29,13 @@ public class SaveSystem : MonoBehaviour
 
     [SerializeField]
     private DialogHUD dialogHUD;
+#if UNITY_WEBGL && !UNITY_EDITOR
+    //
+    // WebGL
+    //
+    [DllImport("__Internal")]
+    private static extern void DownloadFile(string gameObjectName, string methodName, string filename, byte[] byteArray, int byteArraySize);
+#endif
 
 
     private void Start()
@@ -103,15 +113,34 @@ public class SaveSystem : MonoBehaviour
     public void OnSavePressed()
     {
         // create file
-        string fileName = GetSelectedFileName();
-        if (fileName == string.Empty)
-        {
-            dialogHUD.Display("You must provide a name for the file. Either by picking a file that already exists or by typing one.", "Close");
-            return;
-        }
+        // string fileName = GetSelectedFileName();
+        // if (fileName == string.Empty)
+        // {
+        //     dialogHUD.Display("You must provide a name for the file. Either by picking a file that already exists or by typing one.", "Close");
+        //     return;
+        // }
 
         var data = Tuple.Create(ColorContainer.Instance.GetData(), BeakerContainer.Instance.GetData(), BeakerUI.MaxCapacity);
-        SaveData(data, fileName);
+        object[] elements = {data.Item1,data.Item2,data.Item3};
+        string jsonstr = JsonConvert.SerializeObject(elements);
+        Debug.Log("jsonstr = " + jsonstr);
+        string filename = go_fileNameInputField.GetComponent<TMPro.TMP_InputField>().text;
+        byte[] bytes = Encoding.UTF8.GetBytes(filename);
+#if UNITY_WEBGL && !UNITY_EDITOR
+        DownloadFile("Save File","OnFileDownload",filename,bytes,bytes.Length);
+#else
+        var extensions = new [] {
+        new ExtensionFilter("Json Files", "json" )};
+        string path = StandaloneFileBrowser.SaveFilePanel("Save File","./",filename,extensions);
+        if(string.IsNullOrEmpty(path)){
+            return;
+        }
+        File.WriteAllText(path,jsonstr);
+#endif
+        
+
+
+        // SaveData(data, fileName);
         dialogHUD.Display("Saved.", "Close");
 
         ClearInputField();
