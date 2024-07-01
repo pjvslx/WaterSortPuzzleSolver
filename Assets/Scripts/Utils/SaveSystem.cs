@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
@@ -125,9 +126,9 @@ public class SaveSystem : MonoBehaviour
         string jsonstr = JsonConvert.SerializeObject(elements);
         Debug.Log("jsonstr = " + jsonstr);
         string filename = go_fileNameInputField.GetComponent<TMPro.TMP_InputField>().text;
-        byte[] bytes = Encoding.UTF8.GetBytes(filename);
+        byte[] bytes = Encoding.UTF8.GetBytes(jsonstr);
 #if UNITY_WEBGL && !UNITY_EDITOR
-        DownloadFile("Save File","OnFileDownload",filename,bytes,bytes.Length);
+        DownloadFile("Save File","OnFileDownload",$"{filename}.json",bytes,bytes.Length);
 #else
         var extensions = new [] {
         new ExtensionFilter("Json Files", "json" )};
