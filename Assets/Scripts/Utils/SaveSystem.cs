@@ -9,6 +9,13 @@ using Newtonsoft.Json;
 using SFB;
 using System.Text;
 
+[Serializable]
+public class LevelData{
+    public List<ColorSampleData> colorData;
+    public List<Beaker> beakerData;
+    public int maxCapacity;
+}
+
 public class SaveSystem : MonoBehaviour
 {
     private readonly string savePath = "/Save";
@@ -36,6 +43,9 @@ public class SaveSystem : MonoBehaviour
     //
     [DllImport("__Internal")]
     private static extern void DownloadFile(string gameObjectName, string methodName, string filename, byte[] byteArray, int byteArraySize);
+
+    [DllImport("__Internal")]
+    private static extern void UploadFile(string gameObjectName, string methodName, string filter, bool multiple);
 #endif
 
 
@@ -121,18 +131,24 @@ public class SaveSystem : MonoBehaviour
         //     return;
         // }
 
-        var data = Tuple.Create(ColorContainer.Instance.GetData(), BeakerContainer.Instance.GetData(), BeakerUI.MaxCapacity);
-        object[] elements = {data.Item1,data.Item2,data.Item3};
-        string jsonstr = JsonConvert.SerializeObject(elements);
+        // var data = Tuple.Create(ColorContainer.Instance.GetData(), BeakerContainer.Instance.GetData(), BeakerUI.MaxCapacity);
+        // object[] elements = {data.Item1,data.Item2,data.Item3};
+
+        LevelData levelData = new LevelData();
+        levelData.colorData = ColorContainer.Instance.GetData();
+        levelData.beakerData = BeakerContainer.Instance.GetData();
+        levelData.maxCapacity = BeakerUI.MaxCapacity;
+        
+        string jsonstr = JsonConvert.SerializeObject(levelData);
         Debug.Log("jsonstr = " + jsonstr);
         string filename = go_fileNameInputField.GetComponent<TMPro.TMP_InputField>().text;
         byte[] bytes = Encoding.UTF8.GetBytes(jsonstr);
 #if UNITY_WEBGL && !UNITY_EDITOR
-        DownloadFile("Save File","OnFileDownload",$"{filename}.json",bytes,bytes.Length);
+        DownloadFile("Save File","OnFileDownload",$"{filename}.json.txt",bytes,bytes.Length);
 #else
         var extensions = new [] {
-        new ExtensionFilter("Json Files", "json" )};
-        string path = StandaloneFileBrowser.SaveFilePanel("Save File","./",filename,extensions);
+        new ExtensionFilter("Text Files", "txt" )};
+        string path = StandaloneFileBrowser.SaveFilePanel("Save File","./",filename + ".json",extensions);
         if(string.IsNullOrEmpty(path)){
             return;
         }
@@ -151,9 +167,66 @@ public class SaveSystem : MonoBehaviour
         go_saveSpecifficElements.SetActive(false);
     }
 
+    private IEnumerator OutputRoutine(string url) {
+        var loader = new WWW(url);
+        yield return loader;
+        string content = loader.text;
+        Debug.Log("content = " + content);
+        Dictionary<string,object> dic = MiniJSON.Json.Deserialize(content) as Dictionary<string,object>;
+        List<object> colorObjectList = dic["colorData"] as List<object>;
+        List<object> beakerObjectList = dic["beakerData"] as List<object>;
+        int maxCapacity = (int)dic["maxCapacity"];
+
+        List<ColorSampleData> colorList = new List<ColorSampleData>();
+        List<Beaker> beakerList = new List<Beaker>();
+        
+        for(int i = 0; i < colorObjectList.Count; i++){
+            Dictionary<string,object> dicColor = colorObjectList[i] as Dictionary<string,object>;
+            int id = (int)dicColor["id"];
+            float r = (float)dicColor["r"];
+            float g = (float)dicColor["g"];
+            float b = (float)dicColor["b"];
+            float a = (float)dicColor["a"];
+            ColorSampleData colorSampleData = new ColorSampleData(){id = id,r = r,g = g,b = b,a = a};
+            colorList.Add(colorSampleData);
+        }
+
+        for(int i = 0; i < beakerObjectList.Count; i++){
+            Dictionary<string,object> dicBeaker = beakerObjectList[i] as Dictionary<string,object>;
+            List<object> lstContent = dicBeaker["Contents"] as List<object>;
+            List<int> lstContentInt = new List<int>();
+            for(var j = 0; j < lstContent.Count; j++){
+                lstContentInt.Add((int)lstContent[j]);
+            }
+            Beaker beaker = new Beaker(lstContentInt);
+            beakerList.Add(beaker);
+        }
+
+        StartCoroutine(LoadData(colorList,beakerList,maxCapacity));
+
+        // LevelData levelData = Newtonsoft.Json.JsonConvert.DeserializeObject<LevelData>(content);
+        // StartCoroutine(LoadData(levelData.colorData,levelData.beakerData,levelData.maxCapacity));
+    }
+
+    public void OnFileUpload(string url) {
+        if(string.IsNullOrEmpty(url)){
+            return;
+        }
+        StartCoroutine(OutputRoutine(url));
+    }
+
     public void OnLoadPressed()
     {
-        StartCoroutine(LoadData());
+#if UNITY_WEBGL && !UNITY_EDITOR
+        UploadFile("FileInput", "OnFileUpload", ".txt", false);
+#else
+        var extensions = new [] {new ExtensionFilter("Text Files", "txt" )};
+        string[] paths = StandaloneFileBrowser.OpenFilePanel("Load File","./",extensions,false);
+        if(paths.Length == 0){
+            return;
+        }
+        StartCoroutine(OutputRoutine(paths[0]));
+#endif
     }
 
     public void OnDeletePressed()
@@ -181,10 +254,9 @@ public class SaveSystem : MonoBehaviour
 
     // functionality
 
-    private IEnumerator LoadData()
+    private IEnumerator LoadData(List<ColorSampleData> colorData, List<Beaker> beakerData, int maxCapacity)
     {
         // gather data
-        var (colorData, beakerData, maxCapacity) = LoadData(fileNamesContainer.SelectedItem);
 
         // load fill the containers
         try

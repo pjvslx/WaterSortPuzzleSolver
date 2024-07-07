@@ -8,7 +8,14 @@ public class Beaker
     public static int maxCapacity;
 
     public string Value { get; private set; } // used for checking equality
+    public Beaker() { 
+        Contents = new Stack<int>();
+    }
 
+    public Beaker(List<int> contents){
+        Contents = new Stack<int>(contents);
+        UpdateValue();
+    }
 
     public Beaker(Stack<int> contents)
     {
