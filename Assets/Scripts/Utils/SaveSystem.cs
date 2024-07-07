@@ -20,6 +20,8 @@ public class SaveSystem : MonoBehaviour
 {
     private readonly string savePath = "/Save";
     private readonly string extension = "wsp";
+    [SerializeField]
+    private ButtonOpenFile loadButton;
 
     [SerializeField]
     private GameObject go_dialogBox;
@@ -51,6 +53,10 @@ public class SaveSystem : MonoBehaviour
 
     private void Start()
     {
+        loadButton.registLoadFileCb((url)=>{
+            Debug.Log("------load url = " + url);
+            StartCoroutine(OutputRoutine(url));
+        });
         fileNamesContainer.onElementSelected += ClearInputField;
     }
 
